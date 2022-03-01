@@ -3,3 +3,4 @@ loguru==0.5.3
 urllib3==1.26.7
 requests==2.27.1
 aiohttp==3.8.1
+pyuseragents==1.0.5

