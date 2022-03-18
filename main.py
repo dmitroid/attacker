@@ -11,7 +11,7 @@ from loguru import logger
 from pyuseragents import random as random_useragent
 from urllib3 import disable_warnings
 
-HOSTS = 'https://github.com/dmitroid/attacker/blob/master/hosts.json'  # hosts of fucking sites
+HOSTS = 'https://raw.githubusercontent.com/dmitroid/attacker/master/hosts.json'  # hosts of fucking sites
 TIMEOUT = ClientTimeout(
     total=10,
     connect=10,
